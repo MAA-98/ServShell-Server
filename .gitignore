@@ -1,1 +1,23 @@
-/target
+# Ignore target directory (compiled output)
+target/
+
+# Ignore executables in the bin folder
+bin/servsh
+
+# Ignore Cargo's package lock file (optional)
+Cargo.lock
+
+# MacOS specific files
+.DS_Store
+
+# Editor directories and files
+.vscode/
+.idea/
+*.iml
+
+# Swap files
+*.swp
+*.swo
+
+# Rust specific ignores
+*.rs.bk
