@@ -15,12 +15,11 @@ use dashmap::DashMap;
 use once_cell::sync::OnceCell;
 use uuid::Uuid;
 
-/// An atomic reference-counted, thread-safe DashMap, mapping u64 keys to channel senders for sending WebSocket messages.
+// An atomic reference-counted, thread-safe DashMap, mapping u64 keys to FIFO for sending WebSocket messages.
 type Users = Arc<DashMap<u128, mpsc::UnboundedSender<Message>>>;
 
-/// Global USERS variable, initializable at runtime only once
+// Global USERS variable, initializable at runtime only once
 static USERS: OnceCell<Users> = OnceCell::new();
-// Initialize USERS on startup
 
 #[tokio::main]
 async fn main() {
@@ -39,19 +38,17 @@ async fn main() {
 }
 
 async fn ws_shell_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
-    println!("In ws_shell_handler.");
     ws.on_upgrade(handle_socket)
 }
 
 async fn handle_socket(mut socket: WebSocket) {
-    println!("In handle_socket.");
 
     /// Given a socket, split it
     let (mut ws_sender, mut ws_receiver) = socket.split();
     /// Create an unbounded channel to FIFO any messages to or from client
     let (sender, mut receiver) = mpsc::unbounded_channel();
     /// Spawn a task that waits for receiver to get messages and sends them to ws
-    let _outbound_fifo_task = tokio::spawn(async move {
+    let _shell_to_ws_fifo_task = tokio::spawn(async move {
         while let Some(msg) = receiver.recv().await {
             if ws_sender.send(msg).await.is_err() {
                 break;
@@ -68,19 +65,21 @@ async fn handle_socket(mut socket: WebSocket) {
     users.insert(client_id, sender_for_users);
     println!("Users inserted: {client_id}, new sender");
 
-    // Spawn servshell instance in OS
+    /// Spawn servshell instance in OS
     let mut child = match Command::new("./bin/servsh")
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .spawn()
     {
-        Ok(child) => child,
+        Ok(child) => {
+            println!("Child process 'servsh' spawned.");
+            child
+        },
         Err(e) => {
             eprintln!("Failed to launch shell: {e}");
             return;
         }
     };
-    println!("Child process 'servsh' spawned.");
 
     /// Handle inbound ws starting ping msg and ending close message
     while let Some(Ok(msg)) = ws_receiver.next().await {
